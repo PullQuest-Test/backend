@@ -1,0 +1,50 @@
+# .github/workflows/pullquest-auto-comment.yml
+name: PullQuest – comment on new issues
+
+# ─── Trigger: every NEW issue ────────────────────────────────────────────────
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  notify-pullquest:
+    runs-on: ubuntu-latest
+
+    # We need write access so our backend can POST a comment back to GitHub
+    permissions:
+      issues: write
+
+    env:
+      # 🔗 Your backend URL
+      PULLQUEST_BACKEND_URL: https://pullquest-backend-jqze.onrender.com
+      # 🔑 Stored in GitHub Secrets → Settings → Secrets
+      PULLQUEST_API_KEY: "PullQuest-Testk9keu6"
+
+    steps:
+      # 1) Optional: echo context in the Actions log
+      - name: Show context
+        run: |
+          echo "🔍 Repository: ${{ github.repository }}"
+          echo "🔍 Issue #:    ${{ github.event.issue.number }}"
+          echo "🔍 Labels:     ${{ toJson(github.event.issue.labels.*.name) }}"
+
+      # 2) Notify your backend
+      - name: Notify PullQuest backend
+        run: |
+          curl --fail --show-error -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
+            -H "Authorization: Bearer $PULLQUEST_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d @- <<'JSON'
+          {
+            "github_token":  "${{ secrets.GITHUB_TOKEN }}",
+            "org":           "${{ github.event.repository.owner.login }}",
+            "repo":          "${{ github.repository }}",
+            "issue_number":  ${{ github.event.issue.number }},
+            "issue_url":     "${{ github.event.issue.html_url }}",
+            "labels":        ${{ toJson(github.event.issue.labels.*.name) }}
+          }
+          JSON
+
+      # 3) Final log entry (runs only if curl succeeds)
+      - name: Done
+        run: echo "✅ PullQuest notified successfully"
