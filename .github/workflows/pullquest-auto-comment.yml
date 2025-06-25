@@ -16,15 +16,18 @@ jobs:
       issues: write
 
     env:
+      # your self-hosted backend URL
       PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
-      PULLQUEST_API_KEY:    "PullQuest-Testk9keu6"
+      # your PullQuest API key (stored in Settings → Secrets → Actions)
+      PULLQUEST_API_KEY: "PullQuest-Testk9keu6"
 
     steps:
       - name: Show context
         run: |
-          echo "🔍 Repository: ${{ github.repository }}"
-          echo "🔍 Issue #:    ${{ github.event.issue.number }}"
-          echo "🔍 Labels:     ${{ toJson(github.event.issue.labels.*.name) }}"
+          echo "🔍 Repository:   ${{ github.repository }}"
+          echo "🔍 Organization: ${{ github.event.repository.owner.login }}"
+          echo "🔍 Issue #:      ${{ github.event.issue.number }}"
+          echo "🔍 Labels:       ${{ toJson(github.event.issue.labels.*.name) }}"
 
       - name: Notify PullQuest backend
         id: notify
@@ -37,6 +40,7 @@ jobs:
               -d @- <<'JSON'
           {
             "github_token":  "${{ secrets.TOKEN_GITHUB }}",
+            "org":           "${{ github.event.repository.owner.login }}",
             "repo":          "${{ github.repository }}",
             "issue_number":  ${{ github.event.issue.number }},
             "issue_url":     "${{ github.event.issue.html_url }}",
