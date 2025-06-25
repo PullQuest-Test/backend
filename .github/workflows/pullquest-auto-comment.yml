@@ -28,7 +28,7 @@ jobs:
         run: |
           response=$(
             curl --silent --show-error \
-              -X POST "$PULLQUEST_BACKEND_URL/api/comment/github" \
+              -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
               -H "Content-Type: application/json" \
               -H "X-GitHub-Event: ${{ github.event_name }}" \
               -H "X-GitHub-Token: ${{ secrets.TOKEN_GITHUB }}" \
