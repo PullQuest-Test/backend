@@ -1,57 +1,42 @@
 # .github/workflows/pullquest-auto-comment.yml
 name: PullQuest – comment on new issues
-
 on:
   issues:
     types: [opened]
-
+  pull_request:
+    types: [opened]
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-
-    # tie to your "production" environment so it can access its secrets
-    environment: production
-
+    # allow your backend to comment on the issue
     permissions:
       issues: write
-
+      pull-requests: write
+    environment: production
     env:
-      # your self-hosted backend URL
       PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
-      # your PullQuest API key (stored in Settings → Secrets → Actions)
       PULLQUEST_API_KEY: "PullQuest-Testk9keu6"
-
     steps:
       - name: Show context
         run: |
           echo "🔍 Repository:   ${{ github.repository }}"
           echo "🔍 Organization: ${{ github.event.repository.owner.login }}"
-          echo "🔍 Issue #:      ${{ github.event.issue.number }}"
-          echo "🔍 Labels:       ${{ toJson(github.event.issue.labels.*.name) }}"
-
+          echo "🔍 Issue/PR #:   ${{ github.event.issue.number || github.event.pull_request.number }}"
+          echo "🔍 Labels:       ${{ toJson(github.event.issue.labels.*.name || github.event.pull_request.labels.*.name) }}"
       - name: Notify PullQuest backend
         id: notify
         run: |
           response=$(
             curl --silent --show-error \
-              -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
-              -H "Authorization: Bearer $PULLQUEST_API_KEY" \
+              -X POST "$PULLQUEST_BACKEND_URL/api/comment/github" \
               -H "Content-Type: application/json" \
-              -d @- <<'JSON'
-          {
-            "github_token":  "${{ secrets.TOKEN_GITHUB }}",
-            "org":           "${{ github.event.repository.owner.login }}",
-            "repo":          "${{ github.repository }}",
-            "issue_number":  ${{ github.event.issue.number }},
-            "issue_url":     "${{ github.event.issue.html_url }}",
-            "labels":        ${{ toJson(github.event.issue.labels.*.name) }}
-          }
-          JSON
+              -H "X-GitHub-Event: ${{ github.event_name }}" \
+              -H "X-GitHub-Token: ${{ secrets.TOKEN_GITHUB }}" \
+              -d '${{ toJson(github.event) }}'
           )
           echo "🛰️  Backend response:"
           echo "$response"
-          echo "::set-output name=response::$response"
-
+          echo "response=$response" >> $GITHUB_OUTPUT
       - name: Done
         run: |
           echo "✅ PullQuest notified successfully"
