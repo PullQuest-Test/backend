@@ -24,11 +24,17 @@ jobs:
           echo "🔍 Labels:     ${{ toJson(github.event.issue.labels.*.name) }}"
 
       - name: Notify PullQuest backend
+        id: notify
         run: |
-          curl --fail --show-error -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
-            -H "Authorization: Bearer $PULLQUEST_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d @- <<'JSON'
+          # perform the POST and capture the raw response
+          response=$(
+            curl --silent \
+                 --fail \
+                 --show-error \
+                 -X POST "https://pullquestgithubbackend.onrender.com/api/comment/issues" \
+                 -H "Authorization: Bearer $PULLQUEST_API_KEY" \
+                 -H "Content-Type: application/json" \
+                 -d @- <<'JSON'
           {
             "repo":         "${{ github.repository }}",
             "issue_number": ${{ github.event.issue.number }},
@@ -36,6 +42,13 @@ jobs:
             "labels":       ${{ toJson(github.event.issue.labels.*.name) }}
           }
           JSON
+          )
+          echo "🛰️  Backend response:"
+          echo "$response"
+          # expose it as an output for downstream steps
+          echo "::set-output name=response::$response"
 
       - name: Done
-        run: echo "✅ PullQuest notified successfully"
+        run: |
+          echo "✅ PullQuest notified successfully"
+          echo "🔄 Response was: ${{ steps.notify.outputs.response }}"
