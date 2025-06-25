@@ -8,13 +8,12 @@ on:
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-
     permissions:
       issues: write
 
     env:
       PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
-      PULLQUEST_API_KEY:     "PullQuest-Testk9keu6"
+      PULLQUEST_API_KEY:    "PullQuest-Testk9keu6"
 
     steps:
       - name: Show context
@@ -26,29 +25,26 @@ jobs:
       - name: Notify PullQuest backend
         id: notify
         run: |
-          # perform the POST and capture the raw response
           response=$(
-            curl --silent \
-                 --fail \
-                 --show-error \
-                 -X POST "https://pullquestgithubbackend.onrender.com/api/comment/issues" \
-                 -H "Authorization: Bearer $PULLQUEST_API_KEY" \
-                 -H "Content-Type: application/json" \
-                 -d @- <<'JSON'
+            curl --silent --show-error \
+              -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
+              -H "Authorization: Bearer $PULLQUEST_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d @- <<'JSON'
           {
-            "repo":         "${{ github.repository }}",
-            "issue_number": ${{ github.event.issue.number }},
-            "issue_url":    "${{ github.event.issue.html_url }}",
-            "labels":       ${{ toJson(github.event.issue.labels.*.name) }}
+            "github_token":  "${{ secrets.GITHUB_TOKEN }}",
+            "repo":          "${{ github.repository }}",
+            "issue_number":  ${{ github.event.issue.number }},
+            "issue_url":     "${{ github.event.issue.html_url }}",
+            "labels":        ${{ toJson(github.event.issue.labels.*.name) }}
           }
           JSON
           )
           echo "🛰️  Backend response:"
           echo "$response"
-          # expose it as an output for downstream steps
           echo "::set-output name=response::$response"
 
       - name: Done
         run: |
-          echo "✅ PullQuest notified successfully"
+          echo "✅ PulQuest notified successfully"
           echo "🔄 Response was: ${{ steps.notify.outputs.response }}"
