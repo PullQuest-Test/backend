@@ -8,6 +8,10 @@ on:
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
+
+    # tie to your "production" environment so it can access its secrets
+    environment: production
+
     permissions:
       issues: write
 
@@ -32,7 +36,7 @@ jobs:
               -H "Content-Type: application/json" \
               -d @- <<'JSON'
           {
-            "github_token":  "${{ secrets.GITHUB_TOKEN }}",
+            "github_token":  "${{ secrets.TOKEN_GITHUB }}",
             "repo":          "${{ github.repository }}",
             "issue_number":  ${{ github.event.issue.number }},
             "issue_url":     "${{ github.event.issue.html_url }}",
@@ -46,5 +50,5 @@ jobs:
 
       - name: Done
         run: |
-          echo "✅ PulQuest notified successfully"
+          echo "✅ PullQuest notified successfully"
           echo "🔄 Response was: ${{ steps.notify.outputs.response }}"
