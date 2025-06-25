@@ -16,7 +16,7 @@ jobs:
 
     env:
       # 🔗 Your backend URL
-      PULLQUEST_BACKEND_URL: https://pullquest-backend-jqze.onrender.com
+      PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
       # 🔑 Stored in GitHub Secrets → Settings → Secrets
       PULLQUEST_API_KEY: "PullQuest-Testk9keu6"
 
