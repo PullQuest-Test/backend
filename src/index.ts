@@ -2,18 +2,14 @@ import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import authRoutes from "./routes/auth";
 import { verifyToken } from "./middleware/verifyToken";
 import helmet from "helmet";
-import { handlePRWebhook } from "./webhooks/githubWebhooks";
 import passport from "passport";
 import "./auth/github";
 // import contributorRoutes from "./routes/contributorRoutes";
-import maintainerRoutes from "./routes/MaintainerRoutes";
 import { githubApiRateLimit } from "./middleware/rateLimitMiddleware";
 import User from "./model/User";
-import commentRoute from './routes/commentRoutes';
-import LLMRoutes from "./routes/LLMroutes"
+
 dotenv.config();
 
 const app: Application = express();
