@@ -1,46 +1,59 @@
-# .github/workflows/pullquest-pr-comment.yml
-name: PullQuest – comment on new PRs
+name: PullQuest – comment on new PRs (Debug)
 
 on:
   pull_request:
-    types: [opened]          # 👈 only pull-requests
+    types: [opened, reopened, ready_for_review]
+    branches: [main]
 
 jobs:
   notify-pullquest:
-    runs-on: ubuntu-latest
     permissions:
-      pull-requests: write   # (issues: write is not required here)
-
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
-
     steps:
-      - name: Show context
+      - name: Debug - Print PR Info
         run: |
-          echo "🔍 Repo:   ${{ github.event.repository.full_name }}"
-          echo "🔍 Owner:  ${{ github.event.repository.owner.login }}"
-          echo "🔍 PR #:   ${{ github.event.pull_request.number }}"
-          echo "🔍 Labels: $(jq -r '.pull_request.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
-
-      - name: Build payload & notify backend
+          echo "🔍 PR Number: ${{ github.event.pull_request.number }}"
+          echo "🔍 Repository: ${{ github.event.repository.full_name }}"
+          echo "🔍 PR Title: ${{ github.event.pull_request.title }}"
+          echo "🔍 Event Type: ${{ github.event.action }}"
+          
+      - name: Build payload ➜ POST to backend
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
+          # numeric PR number
+          NUMBER=${{ github.event.pull_request.number }}
+          
+          # JSON array of label names
           LABELS=$(jq '.pull_request.labels | map(.name)' "$GITHUB_EVENT_PATH")
-
+          
+          # Assemble payload { owner, repo, prNumber, labels }
           payload=$(jq -n \
             --arg owner  "${{ github.event.repository.owner.login }}" \
             --arg repo   "${{ github.event.repository.name }}" \
-            --argjson prNumber "$PR_NUMBER" \
+            --argjson prNumber "$NUMBER" \
             --argjson labels   "$LABELS" \
             '{owner:$owner, repo:$repo, prNumber:$prNumber, labels:$labels}')
-
+          
           echo "📦 Payload:"
           echo "$payload"
-
-          curl --silent --show-error \
-               -X POST "$BACKEND_URL/api/comment/PullRequest" \
-               -H "Content-Type: application/json" \
-               --data-raw "$payload"
-
+          
+          echo "🌐 Sending to: $BACKEND_URL/api/comment/PullRequest"
+          
+          response=$(curl --fail --show-error --silent \
+            -X POST "$BACKEND_URL/api/comment/PullRequest" \
+            -H "Content-Type: application/json" \
+            --data-raw "$payload" \
+            -w "HTTP %{http_code}" || echo "CURL_FAILED")
+          
+          echo "🔍 Response: $response"
+          
+          if [[ "$response" == "CURL_FAILED" ]]; then
+            echo "❌ Failed to send request to backend"
+            exit 1
+          fi
+      
       - name: Done
         run: echo "✅ PullQuest notified successfully"
