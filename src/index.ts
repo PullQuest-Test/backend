@@ -34,7 +34,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ Initialize Passport WITHOUT sessions (serverless-friendly)
 app.use(passport.initialize());
 
 // Health check
