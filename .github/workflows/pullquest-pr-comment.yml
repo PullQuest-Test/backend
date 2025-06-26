@@ -3,41 +3,41 @@ name: PullQuest – comment on new PRs
 
 on:
   pull_request:
-    types: [opened]          # 👈 only pull-requests
-
+    types: [opened, reopened, ready_for_review]
+    branches: [main]        
 jobs:
   notify-pullquest:
-    runs-on: ubuntu-latest
+
     permissions:
-      pull-requests: write   # (issues: write is not required here)
+      contents: read        
+      pull-requests: read
+
+    runs-on: ubuntu-latest
 
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
 
     steps:
-      - name: Show context
+      - name: Build payload ➜ POST to backend
         run: |
-          echo "🔍 Repo:   ${{ github.event.repository.full_name }}"
-          echo "🔍 Owner:  ${{ github.event.repository.owner.login }}"
-          echo "🔍 PR #:   ${{ github.event.pull_request.number }}"
-          echo "🔍 Labels: $(jq -r '.pull_request.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
+          # numeric PR number
+          NUMBER=${{ github.event.pull_request.number }}
 
-      - name: Build payload & notify backend
-        run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
+          # JSON array of label names
           LABELS=$(jq '.pull_request.labels | map(.name)' "$GITHUB_EVENT_PATH")
 
+          # Assemble payload { owner, repo, prNumber, labels }
           payload=$(jq -n \
             --arg owner  "${{ github.event.repository.owner.login }}" \
             --arg repo   "${{ github.event.repository.name }}" \
-            --argjson prNumber "$PR_NUMBER" \
+            --argjson prNumber "$NUMBER" \
             --argjson labels   "$LABELS" \
             '{owner:$owner, repo:$repo, prNumber:$prNumber, labels:$labels}')
 
           echo "📦 Payload:"
           echo "$payload"
 
-          curl --silent --show-error \
+          curl --fail --show-error --silent \
                -X POST "$BACKEND_URL/api/comment/PullRequest" \
                -H "Content-Type: application/json" \
                --data-raw "$payload"
