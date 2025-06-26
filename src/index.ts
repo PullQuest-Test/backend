@@ -48,7 +48,6 @@ app.get("/health", (req: Request, res: Response): void => {
 });
 
 app.use("/", authRoutes);
-// GitHub OAuth (without sessions)
 app.get("/auth/github", passport.authenticate("github", { 
   scope: ["user:email"],
   session: false 
@@ -63,7 +62,7 @@ app.get(
       const githubUsername = profile.username;
 
       await connectDB();
-// ...
+
     const dbUser = await User.findOneAndUpdate(
       { githubUsername },
       {
