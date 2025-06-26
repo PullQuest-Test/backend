@@ -10,7 +10,7 @@ on:
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-    permissions:        # still harmless to keep
+    permissions:
       issues: write
       pull-requests: write
 
@@ -20,17 +20,26 @@ jobs:
     steps:
       - name: Show context
         run: |
-          echo "🔍 Repo:  ${{ github.event.repository.full_name }}"
-          echo "🔍 Owner: ${{ github.event.repository.owner.login }}"
-          echo "🔍 Num:   ${{ github.event.issue.number || github.event.pull_request.number }}"
+          echo "🔍 Repo:   ${{ github.event.repository.full_name }}"
+          echo "🔍 Owner:  ${{ github.event.repository.owner.login }}"
+          echo "🔍 Num:    ${{ github.event.issue.number || github.event.pull_request.number }}"
+          echo "🔍 Labels: $(jq -r '(.issue.labels // .pull_request.labels) | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
 
       - name: Build payload & notify backend
         run: |
+          # numeric issue / PR number
+          NUMBER=${{ github.event.issue.number || github.event.pull_request.number }}
+
+          # JSON array of label names: ["bug","frontend",…]
+          LABELS=$(jq '(.issue.labels // .pull_request.labels) | map(.name)' "$GITHUB_EVENT_PATH")
+
+          # Build final payload: { owner, repo, issueNumber, labels }
           payload=$(jq -n \
-            --arg owner "${{ github.event.repository.owner.login }}" \
-            --arg repo  "${{ github.event.repository.name }}" \
-            --argjson num ${{ github.event.issue.number || github.event.pull_request.number }} \
-            '{owner:$owner, repo:$repo, issueNumber:$num}')
+            --arg owner  "${{ github.event.repository.owner.login }}" \
+            --arg repo   "${{ github.event.repository.name }}" \
+            --argjson num     "$NUMBER" \
+            --argjson labels  "$LABELS" \
+            '{owner:$owner, repo:$repo, issueNumber:$num, labels:$labels}')
 
           echo "📦 Payload:"
           echo "$payload"
