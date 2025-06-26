@@ -1,18 +1,16 @@
-# .github/workflows/pullquest-auto-comment.yml
-name: PullQuest – comment on new issues/PRs
+# .github/workflows/pullquest-issue-comment.yml
+name: PullQuest – comment on new issues
 
 on:
   issues:
-    types: [opened]
-  pull_request:
-    types: [opened]
+    types: [opened]          # 👈 only issues now
 
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: write
+      issues: write          # PR permission no longer needed but harmless
+      # pull-requests: write   ← can be removed if you want
 
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
@@ -22,18 +20,14 @@ jobs:
         run: |
           echo "🔍 Repo:   ${{ github.event.repository.full_name }}"
           echo "🔍 Owner:  ${{ github.event.repository.owner.login }}"
-          echo "🔍 Num:    ${{ github.event.issue.number || github.event.pull_request.number }}"
-          echo "🔍 Labels: $(jq -r '(.issue.labels // .pull_request.labels) | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
+          echo "🔍 Issue #:${{ github.event.issue.number }}"
+          echo "🔍 Labels: $(jq -r '.issue.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
 
       - name: Build payload & notify backend
         run: |
-          # numeric issue / PR number
-          NUMBER=${{ github.event.issue.number || github.event.pull_request.number }}
+          NUMBER=${{ github.event.issue.number }}
+          LABELS=$(jq '.issue.labels | map(.name)' "$GITHUB_EVENT_PATH")
 
-          # JSON array of label names: ["bug","frontend",…]
-          LABELS=$(jq '(.issue.labels // .pull_request.labels) | map(.name)' "$GITHUB_EVENT_PATH")
-
-          # Build final payload: { owner, repo, issueNumber, labels }
           payload=$(jq -n \
             --arg owner  "${{ github.event.repository.owner.login }}" \
             --arg repo   "${{ github.event.repository.name }}" \
