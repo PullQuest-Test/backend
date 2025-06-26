@@ -1,42 +1,44 @@
 # .github/workflows/pullquest-auto-comment.yml
-name: PullQuest – comment on new issues
+name: PullQuest – comment on new issues/PRs
+
 on:
   issues:
     types: [opened]
   pull_request:
     types: [opened]
+
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-    # allow your backend to comment on the issue
+
+    # These perms only matter if the workflow itself ever needs to write.
+    # Safe to keep; costs nothing.
     permissions:
       issues: write
       pull-requests: write
-    environment: production
+
     env:
-      PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com
       PULLQUEST_API_KEY: "PullQuest-Testk9keu6"
     steps:
       - name: Show context
         run: |
-          echo "🔍 Repository:   ${{ github.repository }}"
-          echo "🔍 Organization: ${{ github.event.repository.owner.login }}"
-          echo "🔍 Issue/PR #:   ${{ github.event.issue.number || github.event.pull_request.number }}"
-          echo "🔍 Labels:       ${{ toJson(github.event.issue.labels.*.name || github.event.pull_request.labels.*.name) }}"
-      - name: Notify PullQuest backend
+          echo "🔍 Repo:  ${{ github.repository }}"
+          echo "🔍 Event: ${{ github.event_name }}"
+          echo "🔍 Num:   ${{ github.event.issue.number || github.event.pull_request.number }}"
+
+      - name: Notify backend
         id: notify
         run: |
-          response=$(
-            curl --silent --show-error \
-              -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
-              -H "Content-Type: application/json" \
-              -H "X-GitHub-Event: ${{ github.event_name }}" \
-              -H "X-GitHub-Token: ${{ secrets.TOKEN_GITHUB }}" \
-              -d '${{ toJson(github.event) }}'
-          )
+          response=$(curl --silent --show-error \
+            -X POST "$BACKEND_URL/api/comment/issues" \
+            -H "Content-Type: application/json" \
+            -d '${{ toJson(github.event) }}')
+
           echo "🛰️  Backend response:"
           echo "$response"
-          echo "response=$response" >> $GITHUB_OUTPUT
+          echo "response=$response" >> "$GITHUB_OUTPUT"
+
       - name: Done
         run: |
           echo "✅ PullQuest notified successfully"
