@@ -26,7 +26,11 @@ passport.use(
         "read:user",
         "user:email", 
         "repo", 
-       
+        "read:org",
+        "write:repo_hook",
+        "admin:repo_hook", 
+        "write:repo_hook", 
+        "admin:repo_hook", 
       ]
     },
     
