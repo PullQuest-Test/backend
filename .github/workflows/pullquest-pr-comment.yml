@@ -1,16 +1,15 @@
-# .github/workflows/pullquest-issue-comment.yml
-name: PullQuest – comment on new issues
+# .github/workflows/pullquest-pr-comment.yml
+name: PullQuest – comment on new PRs
 
 on:
-  issues:
-    types: [opened]          # 👈 only issues now
+  pull_request:
+    types: [opened]          # 👈 only pull-requests
 
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
     permissions:
-      issues: write          # PR permission no longer needed but harmless
-      # pull-requests: write   ← can be removed if you want
+      pull-requests: write   # (issues: write is not required here)
 
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
@@ -20,26 +19,26 @@ jobs:
         run: |
           echo "🔍 Repo:   ${{ github.event.repository.full_name }}"
           echo "🔍 Owner:  ${{ github.event.repository.owner.login }}"
-          echo "🔍 Issue #:${{ github.event.issue.number }}"
-          echo "🔍 Labels: $(jq -r '.issue.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
+          echo "🔍 PR #:   ${{ github.event.pull_request.number }}"
+          echo "🔍 Labels: $(jq -r '.pull_request.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
 
       - name: Build payload & notify backend
         run: |
-          NUMBER=${{ github.event.issue.number }}
-          LABELS=$(jq '.issue.labels | map(.name)' "$GITHUB_EVENT_PATH")
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          LABELS=$(jq '.pull_request.labels | map(.name)' "$GITHUB_EVENT_PATH")
 
           payload=$(jq -n \
             --arg owner  "${{ github.event.repository.owner.login }}" \
             --arg repo   "${{ github.event.repository.name }}" \
-            --argjson num     "$NUMBER" \
-            --argjson labels  "$LABELS" \
-            '{owner:$owner, repo:$repo, issueNumber:$num, labels:$labels}')
+            --argjson prNumber "$PR_NUMBER" \
+            --argjson labels   "$LABELS" \
+            '{owner:$owner, repo:$repo, prNumber:$prNumber, labels:$labels}')
 
           echo "📦 Payload:"
           echo "$payload"
 
           curl --silent --show-error \
-               -X POST "$BACKEND_URL/api/comment/issues" \
+               -X POST "$BACKEND_URL/api/comment/PullRequest" \
                -H "Content-Type: application/json" \
                --data-raw "$payload"
 
