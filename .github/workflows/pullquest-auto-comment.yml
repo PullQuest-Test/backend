@@ -10,35 +10,35 @@ on:
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-    permissions:            # so the job itself *could* comment if you ever want to
+    permissions:        # still harmless to keep
       issues: write
       pull-requests: write
 
-    # keep env clean: point to backend + expose API key
     env:
-      PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
-      PULLQUEST_API_KEY: ${{ secrets.PULLQUEST_API_KEY }}   # ← store the key in repo/org secrets
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com
 
     steps:
       - name: Show context
         run: |
-          echo "🔍 Repo:  ${{ github.repository }}"
-          echo "🔍 Event: ${{ github.event_name }}"
+          echo "🔍 Repo:  ${{ github.event.repository.full_name }}"
+          echo "🔍 Owner: ${{ github.event.repository.owner.login }}"
           echo "🔍 Num:   ${{ github.event.issue.number || github.event.pull_request.number }}"
-          echo "🔍 Labels: $(jq -r '.issue.labels // .pull_request.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
 
-      - name: Notify backend
-        id: notify
+      - name: Build payload & notify backend
         run: |
-          response=$(curl --silent --show-error \
-            -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
-            -H "Content-Type: application/json" \
-            -d '${{ toJson(github.event) }}' )
-          echo "🛰️  Backend response:"
-          echo "$response"
-          echo "response=$response" >> "$GITHUB_OUTPUT"
+          payload=$(jq -n \
+            --arg owner "${{ github.event.repository.owner.login }}" \
+            --arg repo  "${{ github.event.repository.name }}" \
+            --argjson num ${{ github.event.issue.number || github.event.pull_request.number }} \
+            '{owner:$owner, repo:$repo, issueNumber:$num}')
+
+          echo "📦 Payload:"
+          echo "$payload"
+
+          curl --silent --show-error \
+               -X POST "$BACKEND_URL/api/comment/issues" \
+               -H "Content-Type: application/json" \
+               --data-raw "$payload"
 
       - name: Done
-        run: |
-          echo "✅ PullQuest notified successfully"
-          echo "🔄 Response was: ${{ steps.notify.outputs.response }}"
+        run: echo "✅ PullQuest notified successfully"
