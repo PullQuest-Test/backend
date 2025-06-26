@@ -28,12 +28,10 @@ jobs:
           echo "🔍 Num:   ${{ github.event.issue.number || github.event.pull_request.number }}"
 
       - name: Notify backend
-        id: notify
         run: |
-          response=$(curl --silent --show-error \
-            -X POST "$BACKEND_URL/api/comment/issues" \
-            -H "Content-Type: application/json" \
-            -d '${{ toJson(github.event) }}')
+          curl -s -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
+               -H "Content-Type: application/json" \
+               -d '${{ toJson(github.event) }}'
 
           echo "🛰️  Backend response:"
           echo "$response"
