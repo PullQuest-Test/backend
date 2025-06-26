@@ -23,7 +23,7 @@ app.use(cors({
       "https://pull-quest-frontend.vercel.app"
     ];
     if (!incomingOrigin || whitelist.includes(incomingOrigin)) {
-      // allow requests with no origin (like mobile apps, curl) 
+// apps, curl) 
       callback(null, true);
     } else {
       callback(new Error(`Origin ${incomingOrigin} not allowed by CORS`));
