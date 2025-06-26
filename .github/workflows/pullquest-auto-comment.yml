@@ -10,12 +10,14 @@ on:
 jobs:
   notify-pullquest:
     runs-on: ubuntu-latest
-    permissions:
+    permissions:            # so the job itself *could* comment if you ever want to
       issues: write
       pull-requests: write
 
+    # keep env clean: point to backend + expose API key
     env:
-      BACKEND_URL: https://pullquestgithubbackend.onrender.com   # ← single, clear name
+      PULLQUEST_BACKEND_URL: https://pullquestgithubbackend.onrender.com
+      PULLQUEST_API_KEY: ${{ secrets.PULLQUEST_API_KEY }}   # ← store the key in repo/org secrets
 
     steps:
       - name: Show context
@@ -23,14 +25,20 @@ jobs:
           echo "🔍 Repo:  ${{ github.repository }}"
           echo "🔍 Event: ${{ github.event_name }}"
           echo "🔍 Num:   ${{ github.event.issue.number || github.event.pull_request.number }}"
+          echo "🔍 Labels: $(jq -r '.issue.labels // .pull_request.labels | map(.name) | join(", ")' "$GITHUB_EVENT_PATH")"
 
       - name: Notify backend
         id: notify
         run: |
-          curl --silent --show-error \
-               -X POST "$BACKEND_URL/api/comment/issues" \
-               -H "Content-Type: application/json" \
-               --data-raw '${{ toJson(github.event) }}'
+          response=$(curl --silent --show-error \
+            -X POST "$PULLQUEST_BACKEND_URL/api/comment/issues" \
+            -H "Content-Type: application/json" \
+            -d '${{ toJson(github.event) }}' )
+          echo "🛰️  Backend response:"
+          echo "$response"
+          echo "response=$response" >> "$GITHUB_OUTPUT"
 
       - name: Done
-        run: echo "✅ PullQuest notified successfully"
+        run: |
+          echo "✅ PullQuest notified successfully"
+          echo "🔄 Response was: ${{ steps.notify.outputs.response }}"
