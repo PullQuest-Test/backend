@@ -14,7 +14,6 @@ dotenv.config();
 
 const app: Application = express();
 
-// Middleware
 app.use(helmet());
 app.use(cors({
   credentials: true,
