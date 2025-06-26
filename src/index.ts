@@ -1,4 +1,3 @@
-
 import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -13,8 +12,7 @@ import "./auth/github";
 import maintainerRoutes from "./routes/MaintainerRoutes";
 import { githubApiRateLimit } from "./middleware/rateLimitMiddleware";
 import User from "./model/User";
-import commentRoute from './routes/commentRoutes';
-import LLMRoutes from "./routes/LLMroutes"
+
 dotenv.config();
 
 const app: Application = express();
@@ -188,16 +186,4 @@ connectDB()
     console.error('❌ Failed to connect to DB, shutting down', err);
     process.exit(1);
   });
-
-// ✅ For local development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
-  });
-}
-// ✅ Serverless export (required for Vercel)
-export default app;
 
