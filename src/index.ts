@@ -11,7 +11,6 @@ import { githubApiRateLimit } from "./middleware/rateLimitMiddleware";
 import User from "./model/User";
 
 dotenv.config();
-
 const app: Application = express();
 
 app.use(helmet());
