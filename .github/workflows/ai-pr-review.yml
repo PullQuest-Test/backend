@@ -1,56 +1,58 @@
 # .github/workflows/ai-pr-review.yml
 name: AI-powered PR Review
+
 on:
   pull_request:
     types: [opened, reopened, synchronize]
     branches: [main]
+
 jobs:
   ai_review:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
+
     steps:
+      # 1️⃣ Checkout PR code
       - name: Checkout PR code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
+      # 2️⃣ Compute PR diff ── changed to use head SHA
       - name: Compute PR diff
         id: diff
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
-          # Save diff to a file to avoid shell interpretation issues
-          git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }} > diff.txt
-          
+          git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} > diff.txt
+
+      # 3️⃣ Send diff to backend for AI review & comment
       - name: Send diff to backend for AI review & comment
-        id: send
         run: |
-          # Create JSON payload using a more robust approach
-          cat > payload.json << 'EOF'
+          cat > payload.json <<EOF
           {
             "owner": "${{ github.event.repository.owner.login }}",
             "repo": "${{ github.event.repository.name }}",
             "prNumber": ${{ github.event.pull_request.number }},
-            "commitId": "${{ github.sha }}",
+            "commitId": "${{ github.event.pull_request.head.sha }}",   # ← changed
             "diff": ""
           }
           EOF
-          
-          # Add the diff content safely using jq with raw file input
-          jq --rawfile diff diff.txt '.diff = $diff' payload.json > temp_payload.json
-          mv temp_payload.json payload.json
-          
+
+          jq --rawfile diff diff.txt '.diff = $diff' payload.json > tmp && mv tmp payload.json
+
           echo "Sending payload to backend..."
           curl --fail --silent \
                -X POST "$BACKEND_URL/api/ai-review" \
                -H "Content-Type: application/json" \
-               --data @payload.json
-          
-          # Clean up
+               --data-binary @payload.json
+
           rm -f payload.json diff.txt
-      
+
+      # 4️⃣ Done
       - name: Done
         run: echo "🎉 Workflow complete — AI review comment is present."
