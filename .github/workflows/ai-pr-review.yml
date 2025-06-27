@@ -1,0 +1,71 @@
+# .github/workflows/ai-pr-review.yml
+name: AI-powered PR Review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+jobs:
+  ai_review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute PR diff
+        id: diff
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }})
+          PATCH=${DIFF//$'\n'/\\n}
+          echo "::set-output name=patch::$PATCH"
+
+      - name: Send diff to backend for AI review & comment
+        id: send
+        run: |
+          payload=$(jq -n \
+            --arg owner  "${{ github.event.repository.owner.login }}" \
+            --arg repo   "${{ github.event.repository.name }}" \
+            --argjson prNumber "${{ github.event.pull_request.number }}" \
+            --arg patch  "${{ steps.diff.outputs.patch }}" \
+            '{ owner:$owner, repo:$repo, prNumber:$prNumber, diff:$patch }'
+          )
+          curl --fail --silent \
+               -X POST "$BACKEND_URL/api/ai-review" \
+               -H "Content-Type: application/json" \
+               --data-raw "$payload"
+
+      - name: Wait for AI review comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner   = context.repo.owner;
+            const repo    = context.repo.repo;
+            const prNum   = context.payload.pull_request.number;
+            const marker  = '## 🤖 AI Code Review';
+            for (let i = 0; i < 12; i++) {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner, repo, issue_number: prNum
+              });
+              if (comments.some(c => c.body.startsWith(marker))) {
+                console.log('✅ AI review comment detected.');
+                return;
+              }
+              console.log(`⏳ Waiting for comment (${i+1}/12)…`);
+              await new Promise(r => setTimeout(r, 5000));
+            }
+            core.setFailed('Timed out waiting for AI review comment.');
+
+      - name: Done
+        run: echo "🎉 Workflow complete — AI review comment is present."

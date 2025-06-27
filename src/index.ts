@@ -11,10 +11,8 @@ import { githubApiRateLimit } from "./middleware/rateLimitMiddleware";
 import User from "./model/User";
 
 dotenv.config();
-
 const app: Application = express();
 
-// Middleware
 app.use(helmet());
 app.use(cors({
   credentials: true,
@@ -24,7 +22,7 @@ app.use(cors({
       "https://pull-quest-frontend.vercel.app"
     ];
     if (!incomingOrigin || whitelist.includes(incomingOrigin)) {
-      // allow requests with no origin (like mobile apps, curl) 
+// apps, curl) 
       callback(null, true);
     } else {
       callback(new Error(`Origin ${incomingOrigin} not allowed by CORS`));
