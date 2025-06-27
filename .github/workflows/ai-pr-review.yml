@@ -3,69 +3,63 @@ name: AI-powered PR Review
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize]   # run for every new commit to an open PR
     branches: [main]
 
 jobs:
   ai_review:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       pull-requests: write
 
     env:
-      BACKEND_URL: https://pullquestgithubbackend.onrender.com
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com   # ← your backend
 
     steps:
-      - name: Checkout PR code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # 1️⃣  Check out the PR branch (not the synthetic merge commit)
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Compute PR diff
-        id: diff
-        run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}
-          DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }})
-          PATCH=${DIFF//$'\n'/\\n}
-          echo "::set-output name=patch::$PATCH"
+    # 2️⃣  Capture the **real** head-commit SHA (not the merge SHA)
+    - name: Capture head commit SHA
+      id: head
+      run: |
+        echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Send diff to backend for AI review & comment
-        id: send
-        run: |
-          payload=$(jq -n \
-            --arg owner  "${{ github.event.repository.owner.login }}" \
-            --arg repo   "${{ github.event.repository.name }}" \
-            --argjson prNumber "${{ github.event.pull_request.number }}" \
-            --arg patch  "${{ steps.diff.outputs.patch }}" \
-            '{ owner:$owner, repo:$repo, prNumber:$prNumber, diff:$patch }'
-          )
-          curl --fail --silent \
-               -X POST "$BACKEND_URL/api/ai-review" \
-               -H "Content-Type: application/json" \
-               --data-raw "$payload"
+    # 3️⃣  Compute a unified diff (base…HEAD)
+    - name: Compute PR diff
+      id: diff
+      run: |
+        git fetch origin ${{ github.event.pull_request.base.ref }}
+        git diff origin/${{ github.event.pull_request.base.ref }}...${{ steps.head.outputs.sha }} > diff.txt
 
-      - name: Wait for AI review comment
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const owner   = context.repo.owner;
-            const repo    = context.repo.repo;
-            const prNum   = context.payload.pull_request.number;
-            const marker  = '## 🤖 AI Code Review';
-            for (let i = 0; i < 12; i++) {
-              const { data: comments } = await github.rest.issues.listComments({
-                owner, repo, issue_number: prNum
-              });
-              if (comments.some(c => c.body.startsWith(marker))) {
-                console.log('✅ AI review comment detected.');
-                return;
-              }
-              console.log(`⏳ Waiting for comment (${i+1}/12)…`);
-              await new Promise(r => setTimeout(r, 5000));
-            }
-            core.setFailed('Timed out waiting for AI review comment.');
+    # 4️⃣  Build JSON payload and send it to your backend
+    - name: Send diff to backend for AI review & comment
+      run: |
+        payload=$(jq -n \
+          --arg owner   "${{ github.repository_owner }}" \
+          --arg repo    "${{ github.event.repository.name }}" \
+          --argjson prNumber "${{ github.event.pull_request.number }}" \
+          --arg commitId "${{ steps.head.outputs.sha }}" \
+          --rawfile diff diff.txt \
+          '{ owner:$owner,
+             repo:$repo,
+             prNumber:$prNumber,
+             commitId:$commitId,
+             diff:$diff }')
+        echo "📦 Payload being sent:"
+        echo "$payload"
 
-      - name: Done
-        run: echo "🎉 Workflow complete — AI review comment is present."
+        curl --fail --silent --show-error \
+             -X POST "$BACKEND_URL/api/ai-review" \
+             -H "Content-Type: application/json" \
+             --data-binary "$payload"
+
+
+    - name: Done
+      if: success()
+      run: echo "🎉 Workflow complete — AI review comment is present."
