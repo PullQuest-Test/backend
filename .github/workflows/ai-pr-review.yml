@@ -17,13 +17,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
       - name: Compute PR diff
         id: diff
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
-          DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }})
-          PATCH=${DIFF//$'\n'/\\n}
-          echo "::set-output name=patch::$PATCH"
+          # Save diff to a file to avoid shell interpretation issues
+          git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }} > diff.txt
           
       - name: Send diff to backend for AI review & comment
         id: send
@@ -39,9 +39,9 @@ jobs:
           }
           EOF
           
-          # Add the diff content safely using jq
-          TEMP_PAYLOAD=$(jq --arg diff "${{ steps.diff.outputs.patch }}" '.diff = $diff' payload.json)
-          echo "$TEMP_PAYLOAD" > payload.json
+          # Add the diff content safely using jq with raw file input
+          jq --rawfile diff diff.txt '.diff = $diff' payload.json > temp_payload.json
+          mv temp_payload.json payload.json
           
           echo "Sending payload to backend..."
           curl --fail --silent \
@@ -50,7 +50,7 @@ jobs:
                --data @payload.json
           
           # Clean up
-          rm -f payload.json
+          rm -f payload.json diff.txt
       
       - name: Done
         run: echo "🎉 Workflow complete — AI review comment is present."
