@@ -1,75 +1,85 @@
 # .github/workflows/ai-pr-review.yml
 name: AI-powered PR Review
+
 on:
   pull_request:
     types: [opened, reopened, synchronize]
     branches: [main]
+
 jobs:
   ai_review:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
+
     steps:
+      # 1️⃣  Checkout PR
       - name: Checkout PR code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # 2️⃣  Compute unified diff
       - name: Compute PR diff
         id: diff
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
           DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }})
-          PATCH=${DIFF//$'\n'/\\n}
-          echo "::set-output name=patch::$PATCH"
+          DIFF=${DIFF//$'\n'/\\n}       # escape new-lines
+          DIFF=${DIFF//\`/\\\`}         # escape back-ticks
+          echo "::set-output name=patch::$DIFF"
+
+      # 3️⃣  Build payload & POST to backend
       - name: Send diff to backend for AI review & comment
-        id: send
         run: |
-          # Create JSON payload using a more robust approach
-          cat > payload.json << 'EOF'
+          cat > payload.json <<EOF
           {
-            "owner": "${{ github.event.repository.owner.login }}",
-            "repo": "${{ github.event.repository.name }}",
+            "owner":   "${{ github.repository_owner }}",
+            "repo":    "${{ github.event.repository.name }}",
             "prNumber": ${{ github.event.pull_request.number }},
-            "commitId": "${{ github.sha }}",
+            "commitId": "${{ github.event.pull_request.head.sha }}",
             "diff": ""
           }
           EOF
-          
-          # Add the diff content safely using jq
-          TEMP_PAYLOAD=$(jq --arg diff "${{ steps.diff.outputs.patch }}" '.diff = $diff' payload.json)
-          echo "$TEMP_PAYLOAD" > payload.json
-          
-          echo "Sending payload to backend..."
-          curl --fail --silent \
+
+          jq --arg diff "${{ steps.diff.outputs.patch }}" '.diff = $diff' \
+            payload.json > tmp && mv tmp payload.json
+
+          echo "📦 Payload being sent:"
+          cat payload.json
+
+          curl --fail --silent --show-error \
                -X POST "$BACKEND_URL/api/ai-review" \
                -H "Content-Type: application/json" \
-               --data @payload.json
-          
-          # Clean up
-          rm -f payload.json
+               --data-binary @payload.json
+
+      # 4️⃣  Wait for backend to leave a comment
       - name: Wait for AI review comment
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const owner   = context.repo.owner;
-            const repo    = context.repo.repo;
-            const prNum   = context.payload.pull_request.number;
-            const marker  = '## 🤖 AI Code Review';
+            const owner  = context.repo.owner;
+            const repo   = context.repo.repo;
+            const prNum  = context.payload.pull_request.number;
+            const marker = '## 🤖 AI Code Review';
+
             for (let i = 0; i < 12; i++) {
               const { data: comments } = await github.rest.issues.listComments({
                 owner, repo, issue_number: prNum
               });
               if (comments.some(c => c.body.startsWith(marker))) {
-                console.log('✅ AI review comment detected.');
+                console.log('✅ AI review comment detected');
                 return;
               }
-              console.log(`⏳ Waiting for comment (${i+1}/12)…`);
+              console.log(`⏳ Waiting (${i+1}/12)…`);
               await new Promise(r => setTimeout(r, 5000));
             }
-            core.setFailed('Timed out waiting for AI review comment.');
+            core.setFailed('Timed out waiting for AI review comment');
+
       - name: Done
-        run: echo "🎉 Workflow complete — AI review comment is present."
+        run: echo "🎉 Workflow complete — AI review comment present"
