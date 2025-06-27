@@ -3,7 +3,7 @@ name: AI-powered PR Review
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]   # run on every new commit to an open PR
+    types: [opened, reopened, synchronize]
     branches: [main]
 
 jobs:
@@ -11,51 +11,54 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write          # backend posts comments, but job may need it
+      pull-requests: write
 
     env:
       BACKEND_URL: https://pullquestgithubbackend.onrender.com
 
     steps:
-      # 1️⃣  Check out the PR so we can compute a diff
+      # 1. Check out PR code
       - name: Checkout PR code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0            # need full history for diff
+          fetch-depth: 0
 
-      # 2️⃣  Get unified diff between base and head
+      # 2. Compute unified diff
       - name: Compute PR diff
         id: diff
         run: |
           git fetch origin ${{ github.event.pull_request.base.ref }}
           DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...${{ github.sha }})
-          # escape newlines so diff can live inside JSON
-          PATCH=${DIFF//$'\n'/\\n}
+          PATCH=${DIFF//$'\n'/\\n}     # escape newlines for JSON
           echo "::set-output name=patch::$PATCH"
 
-      # 3️⃣  Deliver diff + commitId to backend
+      # 3. Build payload & POST to backend
       - name: Send diff to backend for AI review & comment
         id: send
         run: |
-          payload=$(jq -n \
-            --arg owner     "${{ github.event.repository.owner.login }}" \
-            --arg repo      "${{ github.event.repository.name }}" \
-            --argjson prNumber "${{ github.event.pull_request.number }}" \
-            --arg commitId  "${{ github.event.pull_request.head.sha }}" \
-            --arg patch     "${{ steps.diff.outputs.patch }}" \
-            '{ owner:$owner,
-               repo:$repo,
-               prNumber:$prNumber,
-               commitId:$commitId,
-               diff:$patch }')
-          echo "📦 Payload sent to backend:"
-          echo "$payload"
-          curl --fail --silent \
+          # ---- build base payload (variables expand because heredoc is unquoted) ----
+          cat > payload.json <<EOF
+          {
+            "owner": "${{ github.event.repository.owner.login }}",
+            "repo":  "${{ github.event.repository.name }}",
+            "prNumber": ${{ github.event.pull_request.number }},
+            "commitId": "${{ github.event.pull_request.head.sha }}",
+            "diff": ""
+          }
+          EOF
+
+          # insert the diff safely with jq
+          jq --arg diff "${{ steps.diff.outputs.patch }}" '.diff = $diff' payload.json > tmp && mv tmp payload.json
+
+          echo "📦 Final payload:"
+          cat payload.json
+
+          curl --fail --silent --show-error \
                -X POST "$BACKEND_URL/api/ai-review" \
                -H "Content-Type: application/json" \
-               --data-raw "$payload"
+               --data-binary @payload.json
 
-      # 4️⃣  Wait until backend posts the AI review comment on the PR
+      # 4. Wait until backend posts the AI review comment
       - name: Wait for AI review comment
         uses: actions/github-script@v7
         with:
@@ -73,7 +76,7 @@ jobs:
                 console.log('✅ AI review comment detected.');
                 return;
               }
-              console.log(`⏳ Waiting for comment (${i + 1}/12)…`);
+              console.log(`⏳ Waiting for comment (${i+1}/12)…`);
               await new Promise(r => setTimeout(r, 5000));
             }
             core.setFailed('Timed out waiting for AI review comment.');
