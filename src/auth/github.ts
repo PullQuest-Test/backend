@@ -8,9 +8,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-passport.serializeUser((user, done) => {
-  done(null, user);
-});
 
 passport.deserializeUser((obj: any, done) => {
   done(null, obj);
@@ -25,10 +22,7 @@ passport.use(
       scope: [
         "read:user",
         "user:email", 
-        "repo", 
-        "read:org",
-        "write:repo_hook",
-        "admin:repo_hook", 
+
         "write:repo_hook", 
         "admin:repo_hook", 
       ]
@@ -37,7 +31,7 @@ passport.use(
     function (
       accessToken: string,
       refreshToken: string,
-      profile: GitHubProfile,
+  
       done: VerifyCallback
     ) {
       const user = {
