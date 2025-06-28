@@ -1,0 +1,32 @@
+name: PullQuest – provide form on demand
+
+on:
+  issue_comment:
+    types: [created]            # only new comments
+
+jobs:
+  provide_form:
+    if: >
+      github.event.issue.pull_request &&                     # only run on PRs
+      contains(toLower(trim(github.event.comment.body)),     # case-insensitive
+               '@pullquestai form')                          # exact trigger
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write        # to post PR comments (PR comments live in “issues” API)
+
+    steps:
+      - name: Respond with the form
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            ### 📝 PullQuest AI Form
+            Hi @${{ github.event.comment.user.login }}!  
+            Here’s the information we need:
+
+            1. **Context** – What functionality does this PR cover?  
+            2. **Areas of concern** – Any specific files or behaviours you’re unsure about?  
+            3. **Desired feedback style** – e.g. deep-dive, quick issues, performance tips.  
+
+            _Fill this out and mention **@pullquestai review** when you’re ready!_
