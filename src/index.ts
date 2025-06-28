@@ -81,7 +81,7 @@ app.get(
         { expiresIn: "7d" }
       );
 
-      const frontendUser = {
+
         id: dbUser._id.toString(),
         role: dbUser.role || "contributor",  // make sure `role` exists on the user doc
         email: dbUser.email,
