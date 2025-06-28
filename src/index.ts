@@ -32,7 +32,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ Initialize Passport WITHOUT sessions (serverless-friendly)
 app.use(passport.initialize());
 
 // Health check
@@ -46,7 +45,6 @@ app.get("/health", (req: Request, res: Response): void => {
 });
 
 app.use("/", authRoutes);
-// GitHub OAuth (without sessions)
 app.get("/auth/github", passport.authenticate("github", { 
   scope: ["user:email"],
   session: false 
@@ -61,7 +59,7 @@ app.get(
       const githubUsername = profile.username;
 
       await connectDB();
-// ...
+
     const dbUser = await User.findOneAndUpdate(
       { githubUsername },
       {
@@ -181,16 +179,4 @@ connectDB()
     console.error('❌ Failed to connect to DB, shutting down', err);
     process.exit(1);
   });
-
-// ✅ For local development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
-  });
-}
-// ✅ Serverless export (required for Vercel)
-export default app;
 
