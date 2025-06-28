@@ -8,7 +8,7 @@ const RANDOM_COMMENTS = [
   "🤖 Automated review: Thanks for your contribution! We'll take a look ASAP.",
   "📝 PullQuest AI comment: Great work—review is queued!",
 ];
-
+// new
 /** helper to build the final comment body */
 function buildComment(
   n: number,
