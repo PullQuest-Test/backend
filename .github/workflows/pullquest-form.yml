@@ -1,44 +1,64 @@
-# .github/workflows/pullquest-form.yml
-name: PullQuest – serve “Form” on demand
+name: PullQuestAI XP Trigger
 
 on:
   issue_comment:
-    types: [created]          # only new comments
+    types: [created]
 
 jobs:
-  respond_with_form:
-    # ① Only run if the comment is on a PR
-    # ② … and the body, after trimming white-space, starts with @pullquestai form
-    if: |
-      github.event.issue.pull_request &&
-      startsWith(
-        toLower(trim(github.event.comment.body)),
-        '@pullquestai form'
-      )
+  handle-xp-request:
+    # Only run on pull request comments
+    if: github.event.issue.pull_request
     runs-on: ubuntu-latest
     permissions:
-      issues: write            # needed for PR comments (they’re “issue” objects)
-
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com
+    
     steps:
-      - name: Debug – show raw comment body
-        run: |
-          echo "RAW BODY >>>"
-          echo "${{ github.event.comment.body }}"
-          echo "<<<"
-
-      - name: Post the form
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            ### 📝 PullQuest AI Form  
-            Hi @${{ github.event.comment.user.login }} – please fill this out:
-
-            | Field | Details |
-            |---|---|
-            | **Context** | _What does this PR do?_ |
-            | **Areas of concern** | _Specific files or behaviours to focus on?_ |
-            | **Preferred review style** | _Quick issues_, _deep dive_, _performance tips_, … |
-
-            When ready, comment **`@pullquestai review`** to trigger an AI review. 🚀
+    - name: Check if comment mentions @pullquestai and requests XP
+      id: check-comment
+      run: |
+        comment_body="${{ github.event.comment.body }}"
+        if [[ "$comment_body" == *"@pullquestai"* ]] && [[ "$comment_body" == *"give me the contributor xp form"* ]]; then
+          echo "trigger_action=true" >> $GITHUB_OUTPUT
+          echo "✅ XP request detected!"
+        else
+          echo "trigger_action=false" >> $GITHUB_OUTPUT
+          echo "ℹ️  Not an XP request, skipping..."
+        fi
+    
+    - name: Build payload ➜ POST to backend
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: |
+        PR_NUMBER=${{ github.event.issue.number }}
+        COMMENTER="${{ github.event.comment.user.login }}"
+        
+        # Assemble minimal payload for commenting
+        payload=$(jq -n \
+          --arg owner        "${{ github.event.repository.owner.login }}" \
+          --arg repo         "${{ github.event.repository.name }}" \
+          --arg commenter    "$COMMENTER" \
+          --argjson prNumber "$PR_NUMBER" \
+          '{
+            owner: $owner,
+            repo: $repo, 
+            prNumber: $prNumber,
+            commenter: $commenter
+          }')
+        
+        echo "📦 Payload:"
+        echo "$payload"
+        
+        response=$(curl --fail --show-error --silent \
+          -X POST "$BACKEND_URL/api/comment/form" \
+          -H "Content-Type: application/json" \
+          --data-raw "$payload" \
+          -w '\nHTTP %{http_code}\n' )
+        
+        echo "🔍 Response: $response"
+    
+    - name: Done
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: echo "✅ PullQuestAI backend notified for XP calculation"
