@@ -1,50 +1,45 @@
-# .github/workflows/pullquest-form.yml
-name: PullQuest – serve "Form" on demand
+name: PullQuest – serve form on demand
+
 on:
   issue_comment:
-    types: [created]
+    types: [created]          # fire for every new comment (issues & PRs)
+
 jobs:
   respond_with_form:
-    # Only run if the comment is on a PULL REQUEST and starts with @pullquestai form
-    if: |
-      github.event.issue.pull_request != null &&
-      startsWith(
-        toLower(trim(github.event.comment.body)),
-        '@pullquestai form'
-      )
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: write  # Added this permission
+      issues: write           # PR comments are “issues” in the API
+
     steps:
-      - name: Debug – show event details
+      # ────────────────────────────────────────────────────────────────
+      # 1️⃣  Decide whether we really want to act
+      #     (we run this step unconditionally so we can see the logs)
+      # ────────────────────────────────────────────────────────────────
+      - name: Should we reply?
+        id: check
         run: |
-          echo "Event: ${{ github.event_name }}"
-          echo "Issue number: ${{ github.event.issue.number }}"
-          echo "Is this a Pull Request? ${{ github.event.issue.pull_request != null }}"
-          echo "PR URL: ${{ github.event.issue.pull_request.url || 'Not a PR' }}"
-          echo "Comment author: ${{ github.event.comment.user.login }}"
-          echo "Comment ID: ${{ github.event.comment.id }}"
-          echo "RAW BODY >>>"
-          echo "${{ github.event.comment.body }}"
-          echo "<<<"
-          echo "TRIMMED LOWER BODY >>>"
-          echo "$(echo '${{ github.event.comment.body }}' | tr '[:upper:]' '[:lower:]' | xargs)"
-          echo "<<<"
-      
-      - name: Check trigger condition
-        run: |
-          BODY_LOWER=$(echo '${{ github.event.comment.body }}' | tr '[:upper:]' '[:lower:]' | xargs)
-          echo "Checking if body starts with '@pullquestai form'"
-          if [[ "$BODY_LOWER" == @pullquestai\ form* ]]; then
-            echo "✅ Condition matches!"
+          set -euo pipefail
+          BODY_RAW='${{ github.event.comment.body }}'
+          BODY_LOWER_TRIM=$(echo "$BODY_RAW" | tr '[:upper:]' '[:lower:]' | xargs)
+
+          echo "Raw body      : [$BODY_RAW]"
+          echo "Processed body: [$BODY_LOWER_TRIM]"
+
+          # Condition ➜ must be on a PR **and** start with @pullquestai form
+          if [[ -n "${{ github.event.issue.pull_request }}" && \
+                "$BODY_LOWER_TRIM" == @pullquestai\ form* ]]; then
+            echo "reply=yes" >>"$GITHUB_OUTPUT"
+            echo "✅ Condition matched – will post form"
           else
-            echo "❌ Condition does not match"
-            echo "Expected: '@pullquestai form'"
-            echo "Got: '$BODY_LOWER'"
+            echo "reply=no"  >>"$GITHUB_OUTPUT"
+            echo "❌ Not a match – nothing to do"
           fi
-      
-      - name: Post the form
+
+      # ────────────────────────────────────────────────────────────────
+      # 2️⃣  Post the form comment, *only* if step 1 said so
+      # ────────────────────────────────────────────────────────────────
+      - name: Post PullQuest form
+        if: steps.check.outputs.reply == 'yes'
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -52,11 +47,11 @@ jobs:
           body: |
             ### 📝 PullQuest AI Form  
             Hi @${{ github.event.comment.user.login }} – please fill this out:
-            
+
             | Field | Details |
             |-------|---------|
             | **Context** | *What does this PR do?* |
             | **Areas of concern** | *Specific files or behaviours to focus on?* |
             | **Preferred review style** | *Quick issues*, *deep dive*, *performance tips*, … |
-            
-            When ready, comment **`@pullquestai review`** to trigger an AI review. 🚀
+
+            When ready, comment **`@pullquestai review`** to trigger an AI review 🚀.
