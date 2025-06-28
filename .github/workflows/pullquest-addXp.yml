@@ -1,0 +1,90 @@
+name: PullQuestAI Bonus XP
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  handle-bonus-xp:
+    # Only run on pull request comments
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      BACKEND_URL: https://pullquestgithubbackend.onrender.com
+    
+    steps:
+    - name: Check if comment mentions @pullquestai and adds XP
+      id: check-comment
+      run: |
+        comment_body="${{ github.event.comment.body }}"
+        if [[ "$comment_body" == *"@pullquestai add"* ]] && [[ "$comment_body" == *"xp to @"* ]]; then
+          echo "trigger_action=true" >> $GITHUB_OUTPUT
+          echo "✅ Bonus XP request detected!"
+          
+          # Extract XP amount using regex
+          xp_amount=$(echo "$comment_body" | grep -oP '@pullquestai add \K\d+(?= xp)')
+          echo "xp_amount=$xp_amount" >> $GITHUB_OUTPUT
+          
+          # Extract username using regex  
+          username=$(echo "$comment_body" | grep -oP 'xp to @\K[a-zA-Z0-9_-]+')
+          echo "username=$username" >> $GITHUB_OUTPUT
+          
+          echo "🔍 XP Amount: $xp_amount"
+          echo "🔍 Username: $username"
+        else
+          echo "trigger_action=false" >> $GITHUB_OUTPUT
+          echo "ℹ️  Not a bonus XP request, skipping..."
+        fi
+    
+    - name: Debug – print extracted info
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: |
+        echo "🔍 PR #        : ${{ github.event.issue.number }}"
+        echo "🔍 Requester   : ${{ github.event.comment.user.login }}"
+        echo "🔍 XP Amount   : ${{ steps.check-comment.outputs.xp_amount }}"
+        echo "🔍 Target User : ${{ steps.check-comment.outputs.username }}"
+        echo "🔍 Repo        : ${{ github.event.repository.full_name }}"
+    
+    - name: Build payload ➜ POST to backend
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: |
+        PR_NUMBER=${{ github.event.issue.number }}
+        REQUESTER="${{ github.event.comment.user.login }}"
+        XP_AMOUNT=${{ steps.check-comment.outputs.xp_amount }}
+        TARGET_USERNAME="${{ steps.check-comment.outputs.username }}"
+        
+        # Assemble payload for bonus XP
+        payload=$(jq -n \
+          --arg owner         "${{ github.event.repository.owner.login }}" \
+          --arg repo          "${{ github.event.repository.name }}" \
+          --arg requester     "$REQUESTER" \
+          --arg targetUser    "$TARGET_USERNAME" \
+          --argjson prNumber  "$PR_NUMBER" \
+          --argjson xpAmount  "$XP_AMOUNT" \
+          '{
+            owner: $owner,
+            repo: $repo, 
+            prNumber: $prNumber,
+            requester: $requester,
+            targetUser: $targetUser,
+            xpAmount: $xpAmount
+          }')
+        
+        echo "📦 Payload:"
+        echo "$payload"
+        
+        response=$(curl --fail --show-error --silent \
+          -X POST "$BACKEND_URL/api/comment/XpAddition" \
+          -H "Content-Type: application/json" \
+          --data-raw "$payload" \
+          -w '\nHTTP %{http_code}\n' )
+        
+        echo "🔍 Response: $response"
+    
+    - name: Done
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: echo "✅ PullQuestAI backend notified for bonus XP award"
