@@ -1,57 +1,82 @@
-name: PullQuest – serve form on demand
+name: PullQuestAI XP Trigger
 
 on:
   issue_comment:
-    types: [created]          # fire for every new comment (issues & PRs)
+    types: [created]
 
 jobs:
-  respond_with_form:
+  handle-xp-request:
+    # Only run on pull request comments
+    if: github.event.issue.pull_request
     runs-on: ubuntu-latest
-    permissions:
-      issues: write           # PR comments are “issues” in the API
-
+    
     steps:
-      # ────────────────────────────────────────────────────────────────
-      # 1️⃣  Decide whether we really want to act
-      #     (we run this step unconditionally so we can see the logs)
-      # ────────────────────────────────────────────────────────────────
-      - name: Should we reply?
-        id: check
-        run: |
-          set -euo pipefail
-          BODY_RAW='${{ github.event.comment.body }}'
-          BODY_LOWER_TRIM=$(echo "$BODY_RAW" | tr '[:upper:]' '[:lower:]' | xargs)
+    - name: Check if comment mentions @pullquestai and requests XP
+      id: check-comment
+      run: |
+        comment_body="${{ github.event.comment.body }}"
+        if [[ "$comment_body" == *"@pullquestai"* ]] && [[ "$comment_body" == *"give me the contributor xp for"* ]]; then
+          echo "trigger_action=true" >> $GITHUB_OUTPUT
+        else
+          echo "trigger_action=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Post acknowledgment comment
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: 'Okay, providing in a minute! 🚀'
+          })
+    
+    - name: Trigger XP calculation
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      run: |
+        echo "Triggering XP calculation for user: ${{ github.event.comment.user.login }}"
+        echo "PR number: ${{ github.event.issue.number }}"
+        echo "Comment: ${{ github.event.comment.body }}"
+        
+        # Add your XP calculation logic here
+        # This could be:
+        # - API call to your XP service
+        # - Database update
+        # - Calling another workflow
+        # - Running a script
+        
+        # Example API call (uncomment and modify as needed):
+        # curl -X POST "https://your-api-endpoint.com/calculate-xp" \
+        #   -H "Content-Type: application/json" \
+        #   -d '{
+        #     "user": "${{ github.event.comment.user.login }}",
+        #     "pr_number": "${{ github.event.issue.number }}",
+        #     "repo": "${{ github.repository }}"
+        #   }'
+    
+    - name: Post XP results (optional)
+      if: steps.check-comment.outputs.trigger_action == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Wait a minute as promised, then post results
+          await new Promise(resolve => setTimeout(resolve, 60000));
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🎉 XP calculation complete for @${{ github.event.comment.user.login }}!\n\n` +
+                  `Here are your contributor XP details:\n` +
+                  `- Pull Request: #${{ github.event.issue.number }}\n` +
+                  `- XP Earned: [Your XP calculation results here]\n` +
+                  `- Total XP: [User's total XP here]`
+          })
 
-          echo "Raw body      : [$BODY_RAW]"
-          echo "Processed body: [$BODY_LOWER_TRIM]"
-
-          # Condition ➜ must be on a PR **and** start with @pullquestai form
-          if [[ -n "${{ github.event.issue.pull_request }}" && \
-                "$BODY_LOWER_TRIM" == @pullquestai\ form* ]]; then
-            echo "reply=yes" >>"$GITHUB_OUTPUT"
-            echo "✅ Condition matched – will post form"
-          else
-            echo "reply=no"  >>"$GITHUB_OUTPUT"
-            echo "❌ Not a match – nothing to do"
-          fi
-
-      # ────────────────────────────────────────────────────────────────
-      # 2️⃣  Post the form comment, *only* if step 1 said so
-      # ────────────────────────────────────────────────────────────────
-      - name: Post PullQuest form
-        if: steps.check.outputs.reply == 'yes'
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            ### 📝 PullQuest AI Form  
-            Hi @${{ github.event.comment.user.login }} – please fill this out:
-
-            | Field | Details |
-            |-------|---------|
-            | **Context** | *What does this PR do?* |
-            | **Areas of concern** | *Specific files or behaviours to focus on?* |
-            | **Preferred review style** | *Quick issues*, *deep dive*, *performance tips*, … |
-
-            When ready, comment **`@pullquestai review`** to trigger an AI review 🚀.
+# Optional: Add permissions if needed
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
