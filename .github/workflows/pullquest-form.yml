@@ -1,31 +1,49 @@
 # .github/workflows/pullquest-form.yml
-name: PullQuest – serve “Form” on demand
-
+name: PullQuest – serve "Form" on demand
 on:
   issue_comment:
-    types: [created]          # only new comments
-
+    types: [created]
 jobs:
   respond_with_form:
-    # ① Only run if the comment is on a PR
-    # ② … and the body, after trimming white-space, starts with @pullquestai form
+    # Only run if the comment is on a PULL REQUEST and starts with @pullquestai form
     if: |
-      github.event.issue.pull_request &&
+      github.event.issue.pull_request != null &&
       startsWith(
         toLower(trim(github.event.comment.body)),
         '@pullquestai form'
       )
     runs-on: ubuntu-latest
     permissions:
-      issues: write            # needed for PR comments (they’re “issue” objects)
-
+      issues: write
+      pull-requests: write  # Added this permission
     steps:
-      - name: Debug – show raw comment body
+      - name: Debug – show event details
         run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Issue number: ${{ github.event.issue.number }}"
+          echo "Is this a Pull Request? ${{ github.event.issue.pull_request != null }}"
+          echo "PR URL: ${{ github.event.issue.pull_request.url || 'Not a PR' }}"
+          echo "Comment author: ${{ github.event.comment.user.login }}"
+          echo "Comment ID: ${{ github.event.comment.id }}"
           echo "RAW BODY >>>"
           echo "${{ github.event.comment.body }}"
           echo "<<<"
-
+          echo "TRIMMED LOWER BODY >>>"
+          echo "$(echo '${{ github.event.comment.body }}' | tr '[:upper:]' '[:lower:]' | xargs)"
+          echo "<<<"
+      
+      - name: Check trigger condition
+        run: |
+          BODY_LOWER=$(echo '${{ github.event.comment.body }}' | tr '[:upper:]' '[:lower:]' | xargs)
+          echo "Checking if body starts with '@pullquestai form'"
+          if [[ "$BODY_LOWER" == @pullquestai\ form* ]]; then
+            echo "✅ Condition matches!"
+          else
+            echo "❌ Condition does not match"
+            echo "Expected: '@pullquestai form'"
+            echo "Got: '$BODY_LOWER'"
+          fi
+      
       - name: Post the form
         uses: peter-evans/create-or-update-comment@v4
         with:
@@ -34,11 +52,11 @@ jobs:
           body: |
             ### 📝 PullQuest AI Form  
             Hi @${{ github.event.comment.user.login }} – please fill this out:
-
+            
             | Field | Details |
-            |---|---|
-            | **Context** | _What does this PR do?_ |
-            | **Areas of concern** | _Specific files or behaviours to focus on?_ |
-            | **Preferred review style** | _Quick issues_, _deep dive_, _performance tips_, … |
-
+            |-------|---------|
+            | **Context** | *What does this PR do?* |
+            | **Areas of concern** | *Specific files or behaviours to focus on?* |
+            | **Preferred review style** | *Quick issues*, *deep dive*, *performance tips*, … |
+            
             When ready, comment **`@pullquestai review`** to trigger an AI review. 🚀
